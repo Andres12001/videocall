@@ -7,7 +7,8 @@ Flask==2.3.2
 # Machine Learning and Media
 tensorflow==2.13.0
 mediapipe==0.10.15
-
+gunicorn
+opencv-python
 
 
 # Build Tools
