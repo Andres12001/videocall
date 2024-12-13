@@ -45,6 +45,33 @@
             cursor: pointer;
             z-index: 1000;
         }
+
+        .modeButton {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 10px;
+            font-size: 14px;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 1000;
+        }
+
+        /* Distribuir los botones sin superposición */
+        #buttonNumero {
+            top: 10px;
+            right: 10px;
+        }
+
+        #buttonSaludo {
+            top: 50px;
+            right: 10px;
+        }
+
+        #buttonAccion {
+            top: 90px;
+            right: 10px;
+        }
     </style>
 </head>
 
@@ -52,6 +79,9 @@
     <div id="subtitulos">Subtítulos aquí...</div>
     <div id="resultado">Reconocimiento desactivado</div>
     <button id="toggleButton">Activar Reconocimiento</button>
+    <button id="buttonNumero" class="modeButton" onclick="cambiarModo('numero')">Reconocer Números</button>
+    <button id="buttonSaludo" class="modeButton" onclick="cambiarModo('saludo')">Reconocer Saludos</button>
+    <button id="buttonAccion" class="modeButton" onclick="cambiarModo('accion')">Reconocer Acciones</button>
     <div id="root"></div>
 </body>
 
@@ -65,6 +95,7 @@
 
         let reconocimientoActivo = false;
 
+        // Manejar el botón de activación/desactivación del reconocimiento
         toggleButton.addEventListener("click", () => {
             reconocimientoActivo = !reconocimientoActivo;
             toggleButton.innerText = reconocimientoActivo
@@ -81,39 +112,47 @@
             }
         });
 
-        function getRoomID() {
-            const urlParams = new URLSearchParams(window.location.search);
-            let roomID = urlParams.get("roomID");
-            if (!roomID) {
-                roomID = Math.floor(Math.random() * 10000).toString();
-                const newUrl = `${window.location.origin}${window.location.pathname}?roomID=${roomID}`;
-                window.history.replaceState(null, "", newUrl);
+        // Función para cambiar el modo de reconocimiento
+        async function cambiarModo(modo) {
+            try {
+                const response = await fetch("/set_mode", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ modo }),
+                });
+                const data = await response.json();
+                resultado.innerText = `Modo cambiado a: ${data.modo}`;
+            } catch (error) {
+                console.error("Error cambiando el modo:", error);
             }
-            return roomID;
         }
 
-        const roomID = getRoomID();
+        // Configuración de ZEGOCLOUD
+        const roomID = "testRoom"; // Cambiar si deseas una sala dinámica
         const userID = Math.floor(Math.random() * 10000).toString();
-        const userName = "userName" + userID;
-        const appID = 376109737;
-        const serverSecret = "621e0900146418c8d7f7c790e3c79cc4";
+        const userName = "User_" + userID;
+        const appID = 376109737; // Reemplazar con tu appID de ZEGOCLOUD
+        const serverSecret = "621e0900146418c8d7f7c790e3c79cc4"; // Reemplazar con tu serverSecret
 
         const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, roomID, userID, userName);
 
         const zp = ZegoUIKitPrebuilt.create(kitToken);
         zp.joinRoom({
-            container: document.querySelector("#root"),
-            sharedLinks: [{
-                name: 'Personal link',
-                url: `${window.location.protocol}//${window.location.host}${window.location.pathname}?roomID=${roomID}`,
-            }],
+            container: document.querySelector("#root"), // Contenedor de ZEGOCLOUD
+            sharedLinks: [
+                {
+                    name: "Enlace para compartir",
+                    url: `${window.location.protocol}//${window.location.host}${window.location.pathname}?roomID=${roomID}`,
+                },
+            ],
             scenario: {
-                mode: ZegoUIKitPrebuilt.VideoConference,
+                mode: ZegoUIKitPrebuilt.VideoConference, // Configuración de videoconferencia
             },
         });
 
         let reconocimientoInterval = null;
 
+        // Función para iniciar el reconocimiento de gestos
         function iniciarReconocimiento() {
             const videoElement = document.querySelector("#root video");
             if (!videoElement) {
@@ -145,17 +184,7 @@
 
                     if (response.ok) {
                         const data = await response.json();
-                        const deteccion = data.numero;
-
-                        if (deteccion) {
-                            subtitulos.innerText = deteccion;
-
-                            zp.sendBroadcastMessage({ message: deteccion }, (error, messageID) => {
-                                if (error) {
-                                    console.error("Error enviando el mensaje:", error);
-                                }
-                            });
-                        }
+                        console.log("Reconocimiento:", data.numero);
                     } else {
                         resultado.innerText = "Error procesando el gesto.";
                     }
@@ -166,16 +195,29 @@
             }, 1000);
         }
 
+        // Función para detener el reconocimiento de gestos
         function detenerReconocimiento() {
             clearInterval(reconocimientoInterval);
             reconocimientoInterval = null;
-            subtitulos.innerText = "Subtítulos aquí...";
+            resultado.innerText = "Reconocimiento desactivado";
         }
 
-        zp.onBroadcastMessageReceived = (messageList) => {
-            const mensajes = messageList.map(msg => msg.message).join(" ");
-            subtitulos.innerText = mensajes;
-        };
+        // Función para obtener el subtítulo global desde el backend
+        async function obtenerSubtituloGlobal() {
+            try {
+                const response = await fetch("/get_subtitle");
+                const data = await response.json();
+                subtitulos.innerText = data.texto || "Subtítulos aquí...";
+            } catch (error) {
+                console.error("Error obteniendo el subtítulo:", error);
+            }
+        }
+
+        // Actualizar subtítulos globales cada segundo
+        setInterval(obtenerSubtituloGlobal, 1000);
+
+        // Exponer función cambiarModo globalmente
+        window.cambiarModo = cambiarModo;
     };
 </script>
 
